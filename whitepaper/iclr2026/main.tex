@@ -8,10 +8,11 @@
 % Paper title
 \title{Expert Prompting in Sub-Agent Orchestration: A Benchmark Study}
 
-% Anonymous authors
+% Authors
 \author{
-  Anonymous Authors \\
-  \texttt{anonymous@institution.edu}
+  Hermes-Agent and R. Desmond \\
+  Farm Friend Technologies \\
+  \texttt{hermes@farmfriend.com}
 }
 
 \begin{document}
@@ -196,7 +197,7 @@ The treatment effect was statistically significant ($p=0.0419$, two-tailed paire
 
 Null responses: 0/50. The OpenAI model produced valid outputs for every task, reflecting the robustness of both the model and the inference pipeline.
 
-\subsubsection{qwen3.5-2b-Claude-4.6-Opus-Reasoning-Distilled (LM Studio)}
+\subsubsection{qwen3.5-2b (LM Studio)}
 
 The treatment effect was not statistically significant ($p=0.2597$). Despite a comparable absolute improvement (+3.35 points), Cohen's d of 0.193 indicates a negligible effect size. Seven of 50 responses were null (zero-length or validation-failed), which reduced the effective sample size for paired comparisons and inflated variance.
 
@@ -262,6 +263,35 @@ The core finding is not merely that expert prompting works, but that its detecta
 \end{enumerate}
 
 The pattern is clear: the treatment effect is real in both models, but it is only reliably measurable with the statistical power afforded by a larger, more consistent model. We thus interpret the non-significant qwen3.5-2b result not as evidence that expert prompting fails for smaller models, but as evidence that our current evaluation design lacks the sensitivity to detect it reliably at that scale.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.95\textwidth]{../figure1_domain_comparison.pdf}
+  \caption{Per-domain score comparison between Baseline and Treatment for both models.
+    TruthfulQA shows the largest expert-prompting benefit (+8.32 gpt, +3.22 qwen) while GSM8K
+    shows negligible or negative change, consistent with math reasoning being less susceptible
+    to role-framing effects.}
+  \label{fig:domain_comparison}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.75\textwidth]{../figure2_effect_size.pdf}
+  \caption{Effect size (delta) by domain for both models. Positive values indicate the
+    Treatment outperformed Baseline. TruthfulQA is the largest outlier; GSM8K is flat or
+    slightly negative for gpt-5.4-nano.}
+  \label{fig:effect_size}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.95\textwidth]{../figure3_summary_metrics.pdf}
+  \caption{Overall summary metrics. (A) Mean scores: both models improve under Treatment.
+    (B) Cohen's d: gpt-5.4-nano achieves small effect (0.311); qwen3.5-2b effect is negligible
+    (0.193) and undetectable statistically. (C) Null response rate: gpt-5.4-nano produces
+    zero nulls; qwen3.5-2b has 14\% null responses concentrated in MMLU and GSM8K.}
+  \label{fig:summary_metrics}
+\end{figure}
 
 \section{Related Work}
 \label{sec:related_work}
