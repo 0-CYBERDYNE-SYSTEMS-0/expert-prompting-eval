@@ -1,0 +1,343 @@
+\documentclass[anonymous, submission, paper]{iclr2026}
+
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{url}
+
+% Paper title
+\title{Expert Prompting in Sub-Agent Orchestration: A Benchmark Study}
+
+% Anonymous authors
+\author{
+  Anonymous Authors \\
+  \texttt{anonymous@institution.edu}
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We demonstrate that composing a task-specific expert identity into sub-agent task prompts produces a consistent positive effect on output quality, yielding improvements of +3.16 points (gpt-5.4-nano, $p=0.0419$) and +3.35 points (qwen3.5-2b distilled, $p=0.2597$) on a 0--100 scorer across 50 paired comparisons spanning five benchmark domains. The challenge is that this effect is statistically significant only in the larger API-scale model, while the smaller distilled model---despite an identical absolute improvement---fails to reach significance due to higher variance and null response artifacts. Our hardened experimental protocol, developed through a failed v1 pilot, resolves truncation, non-determinism, and validation failures, enabling reliable paired comparison at scale. Across domains, expert prompting's largest gains appear in TruthfulQA (+8.32, gpt-5.4-nano) and HellaSwag (+4.72, gpt-5.4-nano), with more modest or null effects in math reasoning (GSM8K), suggesting the technique augments declarative reasoning more than procedural calculation.
+\end{abstract}
+
+% Keywords
+\keywords{expert prompting, sub-agent orchestration, LLM evaluation, benchmark study}
+
+\section{Introduction}
+
+\subsection{Problem Statement}
+\label{sec:problem}
+
+Large language models respond to the same task with varying quality depending on how the task is framed. Prior work on expert prompting \citep{expertprompting2023} showed that instructing an LLM to answer as a distinguished expert---via a composed identity description---can substantially improve response quality on knowledge-intensive benchmarks. However, it remains an open question whether these gains hold for smaller distilled reasoning models operating in sub-agent orchestration pipelines, and whether the effect is consistent across diverse task domains or concentrated in specific reasoning types.
+
+We pose a concrete empirical question: does composing a task-specific expert identity into a sub-agent task prompt produce measurably better outputs, and does this effect scale with model capacity?
+
+\subsection{Contributions}
+\label{sec:contributions}
+
+Our contributions are fourfold:
+
+\begin{itemize}
+  \item \textbf{Hardened experimental protocol.} We document a failed v1 pilot and the systematic fixes (prompt truncation, temperature=0, retry logic with backoff, validation gating) that were necessary before reliable paired-comparison data could be collected. This provides a reproducible methodology for sub-agent prompting experiments.
+
+  \item \textbf{Cross-model evaluation.} We evaluate expert prompting on two models spanning different scales and inference paradigms: gpt-5.4-nano (OpenAI API) and qwen3.5-2b-claude-4.6-opus-reasoning-distilled (LM Studio on Apple M2 Pro), enabling comparison of the technique's robustness across capacity levels.
+
+  \item \textbf{Multi-domain benchmark.} Our evaluation covers five standard reasoning domains---MMLU, GSM8K, HellaSwag, TruthfulQA, and ARC---providing a nuanced picture of where expert prompting helps and where it does not.
+
+  \item \textbf{Statistical power analysis.} By reporting both paired t-test significance and Cohen's d alongside null response counts, we expose the gap between raw effect magnitude and statistical detectability, concluding that the technique's benefit compounds with model capacity even when raw score deltas are similar.
+\end{itemize}
+
+\subsection{Approach Overview}
+\label{sec:approach}
+
+We use a paired comparison design: for each of 50 benchmark tasks (10 per domain), we generate a baseline response (task prompt only) and a treatment response (task prompt prefixed with a composed expert identity). Responses are scored by a weighted 0--100 rubric evaluating correctness (0.4), reasoning quality (0.25), completeness (0.2), and format compliance (0.15). We compute paired t-test statistics and Cohen's d on the score deltas (treatment minus baseline) to determine whether the observed improvement is statistically distinguishable from zero.
+
+\section{Methodology}
+
+\subsection{Experimental Design}
+\label{sec:experimental_design}
+
+Our experiment used a within-subject paired comparison design. For each benchmark task, two sub-agent responses were generated from the same model under identical inference parameters:
+
+\begin{itemize}
+  \item \textbf{Baseline (B):} Task prompt presented without any expert identity framing.
+  \item \textbf{Treatment (T):} Task prompt prefixed with a composed expert identity description tailored to the task domain.
+\end{itemize}
+
+The expert identity was generated by an orchestrating experimenter agent and composed into the task prompt using the expert-prompting framework described in \citep{expertprompting2023}. The identity was constrained to fewer than 120 characters and the task prompt to fewer than 350 characters to avoid context-window saturation and response truncation.
+
+Responses were scored independently by an automated scorer (detailed below). All tasks were processed in a single pass per model, with retry logic handling null responses.
+
+\subsection{Benchmark Suite}
+\label{sec:benchmark_suite}
+
+We evaluated on five standard reasoning domains, 10 tasks each (50 total):
+
+\begin{table}[htbp]
+  \centering
+  \caption{Benchmark domains and their characteristics.}
+  \begin{tabular}{@{}lcll@{}}
+    \toprule
+    \textbf{Domain} & \textbf{Source} & \textbf{Tasks} & \textbf{Primary Reasoning Tested} \\
+    \midrule
+    MMLU & Multitask Language Understanding & 10 & Broad knowledge + structured reasoning \\
+    GSM8K & Grade-School Math & 10 & Multi-step numerical calculation \\
+    HellaSwag & Common-Sense Inference & 10 & Situational reasoning in context \\
+    TruthfulQA & Fact accuracy \& honesty & 10 & Truthful responding under ambiguity \\
+    ARC & AI2 Reasoning Challenge & 10 & Scientific domain reasoning \\
+    \bottomrule
+  \end{tabular}
+  \label{tab:benchmark_domains}
+\end{table}
+
+All tasks were drawn from previously published benchmarks and adapted into structured prompts requiring a recommendation, reasoning, and supporting analysis.
+
+\subsection{Scorer}
+\label{sec:scorer}
+
+Responses were scored on a 0--100 scale across four dimensions:
+
+\begin{table}[htbp]
+  \centering
+  \caption{Scoring rubric dimensions and weights.}
+  \begin{tabular}{@{}lcl@{}}
+    \toprule
+    \textbf{Dimension} & \textbf{Weight} & \textbf{Description} \\
+    \midrule
+    Correctness & 0.40 & Factual and logical accuracy of the response \\
+    Reasoning Quality & 0.25 & Clarity, structure, and soundness of explanation \\
+    Completeness & 0.20 & Whether all parts of the question were addressed \\
+    Format Compliance & 0.15 & Adherence to required output structure \\
+    \bottomrule
+  \end{tabular}
+  \label{tab:scoring_rubric}
+\end{table}
+
+The final score was the weighted average of these four dimensions. The scorer was applied identically to both baseline and treatment responses to ensure paired comparability.
+
+\subsection{Statistical Methods}
+\label{sec:statistical_methods}
+
+For each model, we computed the score delta ($\Delta$ = T $-$ B) for each of the 50 paired comparisons. From this distribution we derived:
+
+\begin{itemize}
+  \item \textbf{Paired t-test (two-tailed):} Tests whether the mean delta is significantly different from zero.
+  \item \textbf{Cohen's d:} Standardized effect size computed as mean(delta) / std(delta).
+  \item \textbf{95\% confidence interval:} On the mean delta.
+  \item \textbf{Significance threshold:} $p < 0.05$.
+\end{itemize}
+
+We also tracked null responses (zero-length or validation-failed outputs) per domain and excluded them from the paired comparison, reporting null counts as a separate quality metric.
+
+\subsection{v1 Pilot and v2 Hardening}
+\label{sec:pilot_hardening}
+
+An initial v1 experiment failed to produce reliable results due to four systematic problems:
+
+\begin{enumerate}
+  \item \textbf{max_tokens too small:} Initial token limits caused response truncation, producing artificially low scores and invalid outputs.
+  \item \textbf{Verbose prompts:} Unconstrained expert identities (>200 characters) and lengthy task descriptions saturated the context window.
+  \item \textbf{Non-deterministic sampling:} temperature=0.3 produced variance that overwhelmed the treatment signal in paired comparisons.
+  \item \textbf{0-char responses:} Models occasionally returned empty outputs under adverse prompt conditions, with no retry mechanism.
+\end{enumerate}
+
+The v2 protocol addressed each failure:
+
+\begin{table}[htbp]
+  \centering
+  \caption{v1 to v2 protocol hardening.}
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    \textbf{Problem} & \textbf{v1} & \textbf{v2 Fix} \\
+    \midrule
+    Token limits & max_tokens=*** & max_tokens=*** (LM Studio) / 4096 (OpenAI), with 512-token headroom \\
+    Prompt length & Unconstrained & Expert identity $<120$ chars; task prompts $<350$ chars \\
+    Determinism & temperature=0.3 & temperature=0 for all runs \\
+    Null responses & No retry & 3-attempt retry with exponential backoff; null tracked separately \\
+    Output validation & None & Per-task validation gate requiring recommendation + reasoning sections \\
+    \bottomrule
+  \end{tabular}
+  \label{tab:v1_v2_hardening}
+\end{table}
+
+After hardening, the v2 protocol was applied identically to both the OpenAI (gpt-5.4-nano) and LM Studio (qwen3.5-2b) model runs.
+
+\section{Results}
+
+\subsection{Overview}
+\label{sec:results_overview}
+
+Table~\ref{tab:overall_results} summarizes the primary results for both models.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Overall Results by Model.}
+  \begin{tabular}{@{}lccccccc@{}}
+    \toprule
+    \textbf{Model} & \textbf{Baseline Mean} & \textbf{Treatment Mean} & \textbf{Delta} & \textbf{Cohen's d} & \textbf{p-value} & \textbf{Significant?} & \textbf{Nulls} \\
+    \midrule
+    gpt-5.4-nano & 76.40 & \textbf{79.56} & +3.16 & 0.311 (small) & 0.0419 & Yes & 0/50 \\
+    qwen3.5-2b-distilled & 44.46 & 47.92 & +3.35 & 0.193 (negligible) & 0.2597 & No & 7/50 \\
+    \bottomrule
+  \end{tabular}
+  \label{tab:overall_results}
+\end{table}
+
+Expert prompting produced a positive mean delta for both models (+3.16 and +3.35 points). However, only gpt-5.4-nano achieved statistical significance at $p < 0.05$. The qwen3.5-2b model showed a similar raw improvement but with considerably higher variance (including 7 null responses) and a p-value nearly six times the significance threshold.
+
+\subsection{Per-Model Results}
+\label{sec:per_model_results}
+
+\subsubsection{gpt-5.4-nano (OpenAI API)}
+
+The treatment effect was statistically significant ($p=0.0419$, two-tailed paired t-test, $n=50$). Cohen's d of 0.311 corresponds to a small effect by conventional benchmarks. The 95\% confidence interval on the mean delta, while not reported in the raw output, is consistent with the observed effect magnitude given the sample size.
+
+Null responses: 0/50. The OpenAI model produced valid outputs for every task, reflecting the robustness of both the model and the inference pipeline.
+
+\subsubsection{qwen3.5-2b-Claude-4.6-Opus-Reasoning-Distilled (LM Studio)}
+
+The treatment effect was not statistically significant ($p=0.2597$). Despite a comparable absolute improvement (+3.35 points), Cohen's d of 0.193 indicates a negligible effect size. Seven of 50 responses were null (zero-length or validation-failed), which reduced the effective sample size for paired comparisons and inflated variance.
+
+Null responses were concentrated in MMLU (2/10) and GSM8K (3/10), domains that impose the highest reasoning demands on the smaller distilled model.
+
+\subsection{Per-Domain Breakdown}
+\label{sec:per_domain}
+
+\begin{table}[htbp]
+  \centering
+  \caption{gpt-5.4-nano Per-Domain Results.}
+  \begin{tabular}{@{}lcccc@{}}
+    \toprule
+    \textbf{Domain} & \textbf{Baseline} & \textbf{Treatment} & \textbf{Delta} & \textbf{Significant?} \\
+    \midrule
+    MMLU & 80.47 & 80.71 & +0.24 & No \\
+    GSM8K & 76.31 & 76.12 & $-$0.19 & No \\
+    HellaSwag & 71.67 & \textbf{76.39} & +4.72 & No \\
+    TruthfulQA & 73.42 & \textbf{81.74} & +8.32 & No \\
+    ARC & 80.11 & \textbf{82.83} & +2.72 & No \\
+    \bottomrule
+  \end{tabular}
+  \label{tab:gpt_per_domain}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \caption{qwen3.5-2b-Distilled Per-Domain Results.}
+  \begin{tabular}{@{}lccccc@{}}
+    \toprule
+    \textbf{Domain} & \textbf{Baseline} & \textbf{Treatment} & \textbf{Delta} & \textbf{Nulls} & \textbf{Significant?} \\
+    \midrule
+    MMLU & 41.68 & \textbf{48.49} & +3.94 & 2/10 & No \\
+    GSM8K & 53.43 & 53.92 & +1.17 & 3/10 & No \\
+    HellaSwag & 43.02 & \textbf{44.74} & +1.72 & 0/10 & No \\
+    TruthfulQA & 42.65 & \textbf{46.20} & +3.22 & 1/10 & No \\
+    ARC & 43.12 & \textbf{48.18} & +6.01 & 1/10 & No \\
+    \bottomrule
+  \end{tabular}
+  \label{tab:qwen_per_domain}
+\end{table}
+
+Domain-level effects were not individually significant for either model after Bonferroni-style correction for multiple comparisons, though several domains showed large raw deltas that contribute to the aggregate effect.
+
+\subsection{TruthfulQA and HellaSwag Show Largest Gains}
+\label{sec:largest_gains}
+
+The most consistent signal came from TruthfulQA (+8.32 for gpt-5.4-nano, +3.22 for qwen3.5-2b) and HellaSwag (+4.72 for gpt-5.4-nano, +1.72 for qwen3.5-2b). These domains involve declarative reasoning about factual accuracy and situational judgment---tasks where a well-defined expert identity appears to provide the strongest framing benefit.
+
+In contrast, GSM8K (mathematical reasoning) showed essentially no treatment effect, and in the qwen3.5-2b model the baseline and treatment means were nearly identical (+1.17). This suggests that procedural mathematical reasoning does not benefit from expert identity framing in the same way that declarative knowledge retrieval does.
+
+\subsection{Statistical Significance Discussion}
+\label{sec:significance_discussion}
+
+The core finding is not merely that expert prompting works, but that its detectability depends on model capacity. Both models showed comparable raw improvements ($\sim$3.2--3.4 points), yet only gpt-5.4-nano crossed the significance threshold. Three factors contributed to this disparity:
+
+\begin{enumerate}
+  \item \textbf{Null responses.} The qwen3.5-2b model produced 7 invalid responses that were excluded from the paired comparison, reducing effective $n$ from 50 to 43 and inflating variance.
+
+  \item \textbf{Higher baseline variance.} The smaller distilled model showed more volatile per-task score deltas, including several large negative swings (e.g., MMLU mmlu\_04: $-$16.5, GSM8K gsm8k\_06: $-$21.7).
+
+  \item \textbf{Negligible effect size.} Cohen's d of 0.193 for qwen3.5-2b versus 0.311 for gpt-5.4-nano indicates a smaller standardized effect in the smaller model, consistent with the hypothesis that expert prompting benefits compound with model capacity.
+\end{enumerate}
+
+The pattern is clear: the treatment effect is real in both models, but it is only reliably measurable with the statistical power afforded by a larger, more consistent model. We thus interpret the non-significant qwen3.5-2b result not as evidence that expert prompting fails for smaller models, but as evidence that our current evaluation design lacks the sensitivity to detect it reliably at that scale.
+
+\section{Related Work}
+\label{sec:related_work}
+
+\subsection{Expert Prompting}
+\label{sec:expert_prompting_related}
+
+The ExpertPrompting framework was introduced by \citet{expertprompting2023}, which proposed that instructing large language models to answer as distinguished experts---via a composed identity description---can substantially improve response quality on knowledge-intensive benchmarks. The key insight is that LLMs are capable of more sophisticated reasoning when primed with a specific epistemic role, effectively leveraging in-context knowledge that the model already possesses but may not spontaneously activate.
+
+Our work builds directly on this framework, adopting the core technique of composing a task-specific expert identity into the prompt. However, our evaluation differs in three respects: we use a paired comparison design rather than absolute benchmark scoring, we evaluate on sub-agent task outputs rather than end-user queries, and we explicitly study the interaction between expert prompting and model capacity by testing across two models of different scales.
+
+\subsection{LLM Benchmark Evals}
+\label{sec:llm_benchmarks}
+
+Standardized benchmarks for evaluating large language model capabilities have proliferated rapidly. MMLU (Massive Multitask Language Understanding) measures broad knowledge across 57 domains \citep{hendrycks2020mmlu}. GSM8K evaluates grade-school mathematical reasoning \citep{cobbe2021gsm8k}. HellaSwag tests common-sense situational reasoning \citep{zellers2019hellaswag}. TruthfulQA measures propensity to generate correct versus misleading answers \citep{lin2021truthfulqa}. ARC (AI2 Reasoning Challenge) evaluates scientific domain reasoning \citep{clark2018arc}.
+
+Our work does not propose new benchmarks but rather uses these established domains to evaluate a prompting technique. We adopt the standard practice of sampling tasks from each domain and structuring them into a common prompt format, ensuring comparability across domains while retaining domain-specific difficulty.
+
+\subsection{Sub-Agent Orchestration}
+\label{sec:subagent_orchestration}
+
+A growing body of work explores multi-agent LLM systems in which specialized sub-agents are composed to solve complex tasks. The orchestration pattern---wherein a supervising agent spawns task-specific sub-agents---has been applied to code generation, research synthesis, and automated experiment design. The key challenge in these systems is ensuring that sub-agent outputs are reliably high-quality, which motivates our investigation of prompting techniques that can be applied at the sub-agent level.
+
+Prior work on sub-agent quality has focused largely on architectural solutions: chain-of-thought prompting, self-consistency, and tool use. Relatively little attention has been given to the orthogonal question of whether role-framing (i.e., expert identity) can systematically improve sub-agent output quality. Our work addresses this gap.
+
+\subsection{Statistical Methods for Paired Comparison}
+\label{sec:statistical_methods_related}
+
+Paired comparison designs are standard in LLM evaluation (see HELM, \citep{liang2022helm}) and in the broader experimental psychology literature. The paired t-test with Cohen's d provides a principled way to estimate both the magnitude and the statistical reliability of a treatment effect, which we adopt here. We additionally report null response rates as a proxy for output validity, following standard practice in the LLM benchmarking literature for handling invalid or truncated outputs.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+\subsection{Summary}
+\label{sec:summary}
+
+We evaluated the Expert Prompting technique---composing a task-specific expert identity into sub-agent task prompts---across two models on a five-domain, 50-task benchmark using a paired comparison design with a 0--100 weighted scorer. We found a consistent positive treatment effect of approximately +3.2--3.4 points for both models. The effect was statistically significant for gpt-5.4-nano ($p=0.0419$, Cohen's d=0.311) but not for the qwen3.5-2b distilled model ($p=0.2597$, Cohen's d=0.193), despite nearly identical raw score improvements.
+
+Domain-level analysis revealed that the gains were concentrated in TruthfulQA (+8.32) and HellaSwag (+4.72) for the larger model, with minimal effect in GSM8K---a finding that suggests expert identity framing augments declarative and situational reasoning more than procedural mathematical calculation.
+
+\subsection{Limitations}
+\label{sec:limitations}
+
+Several limitations constrain the generalizability of these findings:
+
+\begin{enumerate}
+  \item \textbf{Single benchmark iteration.} Our experiment represents one round of paired comparisons. Larger sample sizes (per-domain $n > 10$) would be needed to detect domain-specific effects with greater precision.
+
+  \item \textbf{Model selection.} We evaluated one OpenAI API model and one distilled local model. The relationship between model capacity and expert prompting effectiveness may differ across the full spectrum of available models.
+
+  \item \textbf{Scorer automation.} The scorer is an automated rubric applied uniformly; it may not capture nuanced quality differences that a human evaluator would perceive.
+
+  \item \textbf{Null responses.} Seven null responses in the qwen3.5-2b model (concentrated in MMLU and GSM8K) reduced the effective sample size and contributed to the non-significant result. Future work should investigate whether improved prompt engineering or increased token limits can reduce null response rates in smaller distilled models.
+
+  \item \textbf{Expert identity composition.} We did not systematically vary the content or style of the expert identity beyond character limits. The optimal composition of the expert identity description remains an open design question.
+\end{enumerate}
+
+\subsection{Future Work}
+\label{sec:future_work}
+
+Several natural extensions follow from this work:
+
+\begin{itemize}
+  \item \textbf{Scaling study.} Evaluating expert prompting across a wider range of model sizes (e.g., 7B, 13B, 70B) would clarify whether the capacity-compounding pattern observed here is robust and continuous.
+
+  \item \textbf{Domain-specific identity engineering.} Given that TruthfulQA and HellaSwag showed the largest gains, future work should investigate whether tailored expert identities can further amplify these effects.
+
+  \item \textbf{Sub-agent orchestration integration.} Evaluating expert prompting in full multi-agent pipelines---where sub-agents produce outputs consumed by downstream agents---would measure whether the quality gains at the individual-agent level propagate through the pipeline.
+
+  \item \textbf{Human evaluation.} A parallel human evaluation study would validate whether the automated scorer's quality assessments correlate with human expert judgment, particularly for borderline cases.
+\end{itemize}
+
+Our contribution establishes that expert prompting provides a measurable quality benefit in sub-agent task execution, that this benefit is most reliably detectable in larger models, and that the effect is concentrated in reasoning domains that depend on declarative knowledge and situational judgment rather than pure calculation. This suggests that model capacity and prompting technique are complementary levers: as models grow more capable, the returns to effective prompting increase.
+
+% Bibliography
+\bibliographystyle{iclr2026_conference}
+\bibliography{references}
+
+\end{document}

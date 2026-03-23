@@ -1,0 +1,11 @@
+domain,task_id,baseline_score,treatment_score,delta,baseline_correctness,treatment_correctness,baseline_reasoning,treatment_reasoning,baseline_completeness,treatment_completeness,baseline_format,treatment_format,model
+arc,arc_01,75.25,21.75,-53.5,60.0,20.0,85.0,55.0,75.0,0.0,100.0,0.0,gpt-5.4-nano
+arc,arc_02,66.0,84.0,18.0,40.0,60.0,80.0,100.0,75.0,100.0,100.0,100.0,gpt-5.4-nano
+arc,arc_03,68.5,61.75,-6.75,40.0,20.0,90.0,95.0,75.0,75.0,100.0,100.0,gpt-5.4-nano
+arc,arc_04,80.25,21.75,-58.5,60.0,20.0,85.0,55.0,100.0,0.0,100.0,0.0,gpt-5.4-nano
+arc,arc_5,74.75,77.75,3.0,40.0,60.0,95.0,95.0,100.0,75.0,100.0,100.0,gpt-5.4-nano
+arc,arc_06,82.75,82.75,0.0,60.0,60.0,95.0,95.0,100.0,100.0,100.0,100.0,gpt-5.4-nano
+arc,arc_07,80.25,84.0,3.75,60.0,60.0,85.0,100.0,100.0,100.0,100.0,100.0,gpt-5.4-nano
+arc,arc_08,81.5,80.25,-1.25,60.0,60.0,90.0,85.0,100.0,100.0,100.0,100.0,gpt-5.4-nano
+arc,arc_09,81.5,84.0,2.5,60.0,60.0,90.0,100.0,100.0,100.0,100.0,100.0,gpt-5.4-nano
+arc,arc_10,61.75,61.75,0.0,20.0,20.0,95.0,95.0,75.0,75.0,100.0,100.0,gpt-5.4-nano
